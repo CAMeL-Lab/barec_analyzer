@@ -1,4 +1,4 @@
-# BAREC Corpus
+# BAREC Analyzer
 
 This repository contains scripts for training and evaluating models on the BAREC corpus, a large-scale dataset for Arabic Readability Assessment.
 
