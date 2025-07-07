@@ -16,15 +16,15 @@ logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(description="Train model with configurable parameters")
 parser.add_argument('--loss', type=str, required=True, help='Loss type (e.g., CE, EMD)')
-parser.add_argument('--checkpoint', type=str, required=True, help='Model checkpoint')
-parser.add_argument('--input', type=str, required=True, help='Input text type (e.g., word_sents)')
+parser.add_argument('--model', type=str, required=True, help='Pre-trained model checkpoint')
+parser.add_argument('--input_var', type=str, required=True, help='Input variant (e.g., Word, D3Tok)')
 parser.add_argument('--save_dir', type=str, required=True, help='Directory to save the trained model')
 parser.add_argument('--output_path', type=str, required=True, help='Directory to save the output xlsx files')
 args = parser.parse_args()
 
 loss_type = args.loss
-checkpoint = args.checkpoint
-input_text = args.input
+checkpoint = args.model
+input_var = args.input_var
 save_dir_base = args.save_dir
 output_path = args.output_path
 
@@ -39,22 +39,18 @@ barec_3_dict = {
 }
 
 # Compose the full save_dir using the base and dynamic naming
-save_dir = os.path.join(save_dir_base, f"{checkpoint.split('/')[-1]}_{input_text}_{loss_type}_default_19levels")
+save_dir = os.path.join(save_dir_base, f"{checkpoint.split('/')[-1]}_{input_var}_{loss_type}_19levels")
 
-dev_out_xlsx = os.path.join(output_path, f"dev_{checkpoint.split('/')[-1]}_{input_text}_{loss_type}_default_19levels.xlsx")
-test_out_xlsx = os.path.join(output_path, f"test_{checkpoint.split('/')[-1]}_{input_text}_{loss_type}_default_19levels.xlsx")
+dev_out_xlsx = os.path.join(output_path, f"dev_{checkpoint.split('/')[-1]}_{input_var}_{loss_type}_19levels.xlsx")
+test_out_xlsx = os.path.join(output_path, f"test_{checkpoint.split('/')[-1]}_{input_var}_{loss_type}_19levels.xlsx")
 
-print(f"loss: {loss_type}, model: {checkpoint.split('/')[-1]}, input_text: {input_text}, d_mat_type: default, levels: 19")
+print(f"loss: {loss_type}, model: {checkpoint.split('/')[-1]}, input_var: {input_var}, levels: 19")
 
-d_mat_type = "default"
 n_levels = 19
 
-data_path = 'data/1M_sentences_v1_morph_clean.xlsx'
+#data_path = 'data/1M_sentences_v1_morph_clean.xlsx'
 
-if d_mat_type == "default":
-    d_matrix =  [[abs(i-j) for i in range(n_levels)] for j in range(n_levels)]
-else:
-    d_matrix = [[(abs(i-j)/18)+(abs(barec_7_dict[i+1]-barec_7_dict[j+1])/6)+(abs(barec_5_dict[i+1]-barec_5_dict[j+1])/4)+(abs(barec_3_dict[i+1]-barec_3_dict[j+1])/2) for i in range(19)] for j in range(19)]
+d_matrix =  [[abs(i-j) for i in range(n_levels)] for j in range(n_levels)]
 
 class OLL2Trainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False):
@@ -379,52 +375,38 @@ losses_dict = {"CE": Trainer,
 
 loss_function = losses_dict[loss_type]
 
-
-all_df = pd.read_excel(data_path, header=0)
-
-DATA_COLUMN = 'text'
-LABEL_COLUMN = 'label'
-
-real_names = {
-    input_text: DATA_COLUMN,
-    'RL_num_'+str(n_levels): LABEL_COLUMN
-}
-
-all_df.rename(columns= real_names, inplace=True)
-
-
-minus_mapper = {}
-for i in range(n_levels):
-  minus_mapper[i+1] = i
-all_df = all_df.replace({LABEL_COLUMN: minus_mapper})
-
-
-all_df = all_df.groupby('Split')
-
-all_df = all_df[[DATA_COLUMN, LABEL_COLUMN]]
-all_df.columns = [DATA_COLUMN, LABEL_COLUMN]
-
-train_df = all_df.get_group('Train')
-dev_df = all_df.get_group('Dev')
-test_df = all_df.get_group('Test')
-
 set_seed(42)
 
+dataset = load_dataset("CAMeL-Lab/BAREC-Corpus-v1.0")
 
-train = datasets.Dataset.from_pandas(train_df)
-dev = datasets.Dataset.from_pandas(dev_df)
-test = datasets.Dataset.from_pandas(test_df)
-dataset = load_dataset("labr") #dump loading .. only to match the dataset template from huggingface
-dataset['train'] = train
-dataset['dev'] = dev
-dataset['test'] = test
-dataset
+dataset_train = {
+    'text': dataset['train'][input_var],
+    'label': [l-1 for l in dataset['train']['Readability_Level_19']]
+}
+
+dataset_dev = {
+    'text': dataset['validation'][input_var],
+    'label': [l-1 for l in dataset['validation']['Readability_Level_19']]
+}
+
+dataset_test = {
+    'text': dataset['test'][input_var],
+    'label': [l-1 for l in dataset['test']['Readability_Level_19']]
+}
+
+dataset_train = datasets.Dataset.from_dict(dataset_train)
+dataset_dev = datasets.Dataset.from_dict(dataset_dev)
+dataset_test = datasets.Dataset.from_dict(dataset_test)
+
+dataset['train'] = dataset_train
+dataset['validation'] = dataset_dev
+dataset['test'] = dataset_test
 
 
 tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 
 def tokenize_function(example):
-    return tokenizer(example[DATA_COLUMN], truncation=True, max_length=512)
+    return tokenizer(example['text'], truncation=True, max_length=512)
 
 tokenized_datasets = dataset.map(tokenize_function, batched=True)
 data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
@@ -511,7 +493,7 @@ training_args = TrainingArguments(save_dir,
 trainer = loss_function(model_init=model_init,
                   args = training_args,
                   train_dataset = tokenized_datasets['train'],
-                  eval_dataset = tokenized_datasets['dev'],
+                  eval_dataset = tokenized_datasets['validation'],
                   data_collator=data_collator,
                   tokenizer=tokenizer,
                   compute_metrics = compute_metrics)
@@ -520,7 +502,7 @@ trainer = loss_function(model_init=model_init,
 trainer.train()
 
 
-preds, labels, metrics = trainer.predict(tokenized_datasets['dev'], metric_key_prefix="eval")
+preds, labels, metrics = trainer.predict(tokenized_datasets['validation'], metric_key_prefix="eval")
 trainer.log_metrics("eval", metrics)
 trainer.save_metrics("eval", metrics)
 
@@ -570,8 +552,8 @@ rank_of_correct = []
 diff = []
 
 for i in range(len(preds)):
-  texts.append(list(dev_df['text'])[i])
-  labels.append(list(dev_df['label'])[i]+1)
+  texts.append(list(dataset_dev['text'])[i])
+  labels.append(list(dataset_dev['label'])[i]+1)
   predictions.append(argmax(preds[i])+1)
   labels_7.append(barec_7_dict[labels[-1]])
   predictions_7.append(barec_7_dict[predictions[-1]])
@@ -644,12 +626,6 @@ avg_distance = sum(diff)/len(diff)
 
 print(f"Accuracy: {acc*100:.4f}")
 print(f"Accuracy with margin of one level: {acc_within_one_level*100:.4f}")
-#print(f"Accuracy of top 2 choices: {acc_top_2*100:.4f}")
-#print(f"Accuracy of top 3 choices: {acc_top_3*100:.4f}")
-#print(f"Accuracy of top 4 choices: {acc_top_4*100:.4f}")
-#print(f"Accuracy of SAMER levels: {acc_samer*100:.4f}")
-#print(f"Accuracy of BAREC groups: {acc_barec*100:.4f}")
-#print(f"Average rank of correct label: {avg_rank:.4f}")
 print(f"Average distance between labels and predictions: {avg_distance:.6f}")
 print(f"Quadratic Weighted Kappa: {QWK*100:.4f}")
 print(f"Accuracy_7: {acc_7*100:.4f}")
@@ -658,7 +634,6 @@ print(f"Accuracy_3: {acc_3*100:.4f}")
 
 
 v = {
-    #'original text': original_texts,
     'text': texts,
     'label': labels,
     'prediction': predictions,
@@ -733,8 +708,8 @@ rank_of_correct = []
 diff = []
 
 for i in range(len(preds)):
-  texts.append(list(test_df['text'])[i])
-  labels.append(list(test_df['label'])[i]+1)
+  texts.append(list(dataset_test['text'])[i])
+  labels.append(list(dataset_test['label'])[i]+1)
   predictions.append(argmax(preds[i])+1)
   labels_7.append(barec_7_dict[labels[-1]])
   predictions_7.append(barec_7_dict[predictions[-1]])
@@ -807,12 +782,6 @@ avg_distance = sum(diff)/len(diff)
 
 print(f"Accuracy: {acc*100:.4f}")
 print(f"Accuracy with margin of one level: {acc_within_one_level*100:.4f}")
-#print(f"Accuracy of top 2 choices: {acc_top_2*100:.4f}")
-#print(f"Accuracy of top 3 choices: {acc_top_3*100:.4f}")
-#print(f"Accuracy of top 4 choices: {acc_top_4*100:.4f}")
-#print(f"Accuracy of SAMER levels: {acc_samer*100:.4f}")
-#print(f"Accuracy of BAREC groups: {acc_barec*100:.4f}")
-#print(f"Average rank of correct label: {avg_rank:.4f}")
 print(f"Average distance between labels and predictions: {avg_distance:.6f}")
 print(f"Quadratic Weighted Kappa: {QWK*100:.4f}")
 print(f"Accuracy_7: {acc_7*100:.4f}")
@@ -821,7 +790,6 @@ print(f"Accuracy_3: {acc_3*100:.4f}")
 
 
 v = {
-    #'original text': original_texts,
     'text': texts,
     'label': labels,
     'prediction': predictions,
