@@ -1,17 +1,18 @@
 # BAREC Analyzer
 
-This repository contains scripts for preprocessing, training and evaluating the models in our paper [A Large and Balanced Corpus for Fine-grained Arabic Readability Assessment](https://arxiv.org/abs/2502.13520).
-The BAREC corpus is avaialble on [huggingface](https://huggingface.co/datasets/CAMeL-Lab/BAREC-Corpus-v1.0).
+This repository contains scripts for preprocessing, training, and evaluating the models in our paper [A Large and Balanced Corpus for Fine-grained Arabic Readability Assessment](https://arxiv.org/abs/2502.13520).
+The BAREC corpus is available on [Hugging Face](https://huggingface.co/datasets/CAMeL-Lab/BAREC-Corpus-v1.0).
 
 ## Repository Structure
-- `scripts/preprocess.py`: Processes raw texts into our tokenized input vriants (`Word`, `D3Tok`, `Lex`, and `D3Lex`). You **DO NOT** need to run this script to process BAREC corpus as we already provided these input variants for the full corpus.
-- `scripts/train.py`: Script for fine-tuning pre-trained uning BAREC corpus. The script supports different loss functions and input variants. It also generates results and saves trained models.
+- `scripts/preprocess.py`: Processes raw texts into our tokenized input variants (`Word`, `D3Tok`, `Lex`, and `D3Lex`). You **DO NOT** need to run this script to process the BAREC corpus as we already provide these input variants for the full corpus.
+- `scripts/train.py`: Script for fine-tuning pre-trained models using the BAREC corpus. The script supports different loss functions and input variants. It also generates results and saves trained models.
 - `scripts/collect_results.py`: Aggregates evaluation results from multiple trained models and exports them as CSV files for further analysis.
 
 ## Setup
 
-**Install dependencies:**
-To run `scripts/preprocess.py` you need to install [CAMeL Tools](https://github.com/CAMeL-Lab/camel_tools) and get the CAMeLBERT MSA morphosyntactic tagger from `camel_data`.
+### Install Dependencies
+
+To run `scripts/preprocess.py`, you need to install [CAMeL Tools](https://github.com/CAMeL-Lab/camel_tools) and get the CAMeLBERT MSA morphosyntactic tagger from `camel_data`:
 
 ```sh
 git clone https://github.com/CAMeL-Lab/camel_tools.git
@@ -39,10 +40,10 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Pre-processing
+### Preprocessing
 
 Preprocess raw text to different input variants.
-You **DO NOT** need this script if you want to train on BAREC corpus as we already provided these input variants for the full corpus.
+You **DO NOT** need this script if you want to train on the BAREC corpus as we already provide these input variants for the full corpus.
 
 ```sh
 python scripts/preprocess.py \
@@ -57,9 +58,9 @@ python scripts/preprocess.py \
 - `--db` (**optional**): Path to morphological database to use for processing
 - `--output`: Path to output file to save processed text data
 
-* **Important Note**: The default morphological analyzer used in the pre-processing script is not the same as the one in the paper, which is licensed by LDC. To download the same morphogical analyzer, you need to:
+**Important Note**: The default morphological analyzer used in the preprocessing script is not the same as the one in the paper, which is licensed by LDC. To download the same morphological analyzer, you need to:
 
-1. Optain the morphological analyzer from LDC ([LDC2010L01](https://catalog.ldc.upenn.edu/LDC2010L01)).
+1. Obtain the morphological analyzer from LDC ([LDC2010L01](https://catalog.ldc.upenn.edu/LDC2010L01)).
 2. Download the muddled version of the analyzer from [here](https://github.com/CAMeL-Lab/CAMeLBERT_morphosyntactic_tagger/releases/download/v0.0.1/analyzer-msa.muddle).
 3. Install [Muddler](https://github.com/CAMeL-Lab/muddler), a tool for sharing derived data, and use it to unmuddle the encrypted file.
   ```sh
@@ -72,7 +73,7 @@ python scripts/preprocess.py \
 
 ### Training a Model
 
-Run the training script on BAREC corpus with configurable parameters:
+Run the training script on the BAREC corpus with configurable parameters:
 
 ```sh
 python scripts/train.py \
