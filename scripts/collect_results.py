@@ -12,6 +12,7 @@ models_path = args.models_path
 output_path = args.output_path
 
 trained_models = os.listdir(models_path)
+trained_models = [model for model in trained_models if os.path.isdir(os.path.join(models_path, model))]
 trained_models.sort()
 
 dev_results = {
